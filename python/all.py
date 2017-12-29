@@ -13,10 +13,10 @@ import activation
 import predict
 import visualize
 
-input_layer_size = 64
-hidden_layer_size = 50
-num_labels = 10
-num_examples = 2000
+input_layer_size = 2
+hidden_layer_size = 5
+num_labels = 5
+num_examples = 5000
 
 def randInitialize(L_in, L_out):
     return np.random.rand(L_out, L_in)
@@ -41,31 +41,30 @@ def cost_gradient_function(nn_params, X, y, lam, l1, l2, l3, act_func):
     activation_function = act_func['func']
     activation_gradient = act_func['gradient']
 
-    #TODO: Vectorize
-    #Calculate error 
-    for i in range (m):
-        #Forward Propagation
-        z2 = np.matmul(X[i], W1) + b1
-        a2 = activation_function(z2)
-        z3 = np.matmul(a2, W2) + b2
-        z3_exp = np.exp(z3)
-        a3 = z3_exp / sum(z3_exp) #Softmax
+    #Forward Propagation
+    z2 = np.matmul(X, W1) + b1
+    a2 = activation_function(z2)
+    z3 = np.matmul(a2, W2) + b2
+    z3_exp = np.exp(z3)
+    a3 = z3_exp / np.sum(z3_exp, axis=1)[:,None] #Softmax : [m * l3]
 
-        #Backward Propagation
-        Y = np.zeros(num_labels)
-        Y[y[i]] = 1
-        J += (-1/m) * sum(Y * np.log(a3) + (1 - Y) * np.log(1 - a3)) 
-       
-        d3 = a3 - Y
-        d2 = np.matmul(d3, W2.T) * activation_gradient(a2)
-    
-        W2_gradient += np.outer(d3, a2).T
-        b2_gradient += d3 
-        W1_gradient += np.outer(d2, X[i]).T
-        b1_gradient += d2
+    #Backward Propagation
+    Y = np.zeros((m, l3))
+    #TODO: Use vectorized version
+    for i in range(len(y)):
+        Y[i, y[i]] = 1
+    J += (-1/m) * np.sum(Y * np.log(a3) + (1 - Y) * np.log(1 - a3))
+   
+    d3 = a3 - Y
+    d2 = np.matmul(d3, W2.T) * activation_gradient(a2)
+
+    W2_gradient += np.matmul(a2.T, d3)
+    b2_gradient += np.sum(d3, axis=0)
+    W1_gradient += np.matmul(X.T, d2)
+    b1_gradient += np.sum(d2, axis=0)
 
     #Adding regularization
-    J += lam/(2*m) * (sum(sum(W2*W2)) + sum(sum(W1*W1)))
+    J += lam/(2*m) * (np.sum(W2*W2) + np.sum(W1*W1))
     W1_gradient = (1/m) * (W1_gradient + lam * W1)
     W2_gradient = (1/m) * (W2_gradient + lam * W2)
     b1_gradient = 1/m * b1_gradient
@@ -76,10 +75,12 @@ def cost_gradient_function(nn_params, X, y, lam, l1, l2, l3, act_func):
     return (J, nn_gradients)
 
 def build_model(X, y, act_func, hyperparams):
-    W1 = np.random.rand(input_layer_size, hidden_layer_size)
-    W2 = np.random.rand(hidden_layer_size, num_labels)
-    b1 = np.random.rand(hidden_layer_size)
-    b2 = np.random.rand(num_labels)
+    #TODO: use smaller range of weights [0,0.12)
+    epsilon = 0.12
+    W1 = np.random.rand(input_layer_size, hidden_layer_size) * epsilon
+    W2 = np.random.rand(hidden_layer_size, num_labels) * epsilon
+    b1 = np.random.rand(hidden_layer_size) * epsilon
+    b2 = np.random.rand(num_labels) * epsilon
 
     m = len(X)
 
@@ -88,7 +89,7 @@ def build_model(X, y, act_func, hyperparams):
     nn_params = np.concatenate((W1.ravel(), W2.ravel(), b1.ravel(), b2.ravel()))
     
     #TODO: use minimization function
-    minimized = minimize(cost_gradient_function, nn_params, args=(X, y, lam, input_layer_size, hidden_layer_size, num_labels, act_func), method='BFGS', jac=True, options = {'disp': True, 'maxiter': 100})
+    minimized = minimize(cost_gradient_function, nn_params, args=(X, y, lam, input_layer_size, hidden_layer_size, num_labels, act_func), method='BFGS', jac=True, options = {'disp': True, 'maxiter': 100}, tol=0.0001)
     print minimized
     
     l1 = input_layer_size
@@ -106,7 +107,7 @@ def build_model(X, y, act_func, hyperparams):
 
 def fit_hyperparameters(X_train, y_train, X_val, y_val, act_func):
 
-    #return {'lam': 0.1}
+    return {'lam': 0.1}
     lam = [0.1, 0.3, 1]
     alpha = [0.1, 0.3, 1]
     
@@ -133,15 +134,15 @@ def run():
     np.random.seed(0)
     #X, y = sklearn.datasets.make_moons(n_samples=num_examples, noise=0.20)
     #X, y = sklearn.datasets.make_classification(n_samples = num_examples, n_features=2, n_classes=2, n_informative=2, n_redundant=0, n_repeated=0, n_clusters_per_class=1)
-    #X, y = sklearn.datasets.make_blobs(n_samples=num_examples, n_features=2, centers=num_labels)
+    X, y = sklearn.datasets.make_blobs(n_samples=num_examples, n_features=2, centers=num_labels)
     #TODO: add feature scalig for this to work
     #X, y = sklearn.datasets.load_wine(True)
-    X, y = sklearn.datasets.load_digits(return_X_y=True)
+    #X, y = sklearn.datasets.load_digits(return_X_y=True)
     
     X_tc, X_test, y_tc, y_test = train_test_split(X, y, test_size=0.2, random_state=26, stratify=y)
     X_train, X_val, y_train, y_val = train_test_split(X_tc, y_tc, test_size=0.2, random_state=26, stratify=y_tc)
 
-    #visualize.scatter_plot(X_train, y_train)
+    visualize.scatter_plot(X_train, y_train)
     
     #TODO: ONLY single option should be set
     act_func = {"func": activation.tanh, "gradient": activation.tanh_gradient}
@@ -159,4 +160,4 @@ def run():
     print "Test set Accuracy = ", accuracy
     print "Woo hoo!"
  
-    #visualize.plot_decision_boundary(model, X, y, act_func)
+    visualize.plot_decision_boundary(model, X, y, act_func)
