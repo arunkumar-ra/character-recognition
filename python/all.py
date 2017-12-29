@@ -13,9 +13,9 @@ import activation
 import predict
 import visualize
 
-input_layer_size = 2
-hidden_layer_size = 10
-num_labels = 2
+input_layer_size = 64
+hidden_layer_size = 50
+num_labels = 10
 num_examples = 2000
 
 def randInitialize(L_in, L_out):
@@ -41,6 +41,7 @@ def cost_gradient_function(nn_params, X, y, lam, l1, l2, l3, act_func):
     activation_function = act_func['func']
     activation_gradient = act_func['gradient']
 
+    #TODO: Vectorize
     #Calculate error 
     for i in range (m):
         #Forward Propagation
@@ -70,8 +71,9 @@ def cost_gradient_function(nn_params, X, y, lam, l1, l2, l3, act_func):
     b1_gradient = 1/m * b1_gradient
     b2_gradient = 1/m * b2_gradient
 
+    print "Cost : ", J
     nn_gradients = np.concatenate((W1_gradient.ravel(), W2_gradient.ravel(), b1_gradient.ravel(), b2_gradient.ravel()))
-    return np.concatenate(([J], nn_gradients))
+    return (J, nn_gradients)
 
 def build_model(X, y, act_func, hyperparams):
     W1 = np.random.rand(input_layer_size, hidden_layer_size)
@@ -82,28 +84,18 @@ def build_model(X, y, act_func, hyperparams):
     m = len(X)
 
     lam = hyperparams['lam']
-    alpha = hyperparams['alpha']
 
     nn_params = np.concatenate((W1.ravel(), W2.ravel(), b1.ravel(), b2.ravel()))
     
     #TODO: use minimization function
-    #minimized = minimize(cost_gradient_function, nn_params, args=(X, y, 1, input_layer_size, hidden_layer_size, num_labels), method='BFGS', jac=True, options = {'disp': True})
-    #print minimized
-    
-    for i in range(150):
-        J_gradients = cost_gradient_function(nn_params, X, y, lam, input_layer_size, hidden_layer_size, num_labels, act_func)
-        J = J_gradients[0]
-        gradients = J_gradients[1:]
-        nn_params -= alpha * gradients
-
-        if i % 20 == 0 :
-            print "J value is ", J
+    minimized = minimize(cost_gradient_function, nn_params, args=(X, y, lam, input_layer_size, hidden_layer_size, num_labels, act_func), method='BFGS', jac=True, options = {'disp': True, 'maxiter': 100})
+    print minimized
     
     l1 = input_layer_size
     l2 = hidden_layer_size
     l3 = num_labels
 
-    #nn_params = minimized.x
+    nn_params = minimized.x
 
     W1 = nn_params[0:l1*l2].reshape(l1, l2)
     W2 = nn_params[l1*l2:l1*l2 + l2*l3].reshape(l2, l3)
@@ -114,8 +106,7 @@ def build_model(X, y, act_func, hyperparams):
 
 def fit_hyperparameters(X_train, y_train, X_val, y_val, act_func):
 
-    return {'lam': 0.1, 'alpha': 0.1}
-
+    #return {'lam': 0.1}
     lam = [0.1, 0.3, 1]
     alpha = [0.1, 0.3, 1]
     
@@ -123,36 +114,34 @@ def fit_hyperparameters(X_train, y_train, X_val, y_val, act_func):
 
     best_accuracy = 0
     for i in range (len(lam)):
-        for j in range (len(alpha)):
-            hyperparams = {'lam': lam[i], 'alpha': alpha[j]}
-            model = build_model(X_train, y_train, act_func, hyperparams)
-            predictions = predict.predict(model, X_val, act_func)
+        hyperparams = {'lam': lam[i]}
+        model = build_model(X_train, y_train, act_func, hyperparams)
+        predictions = predict.predict(model, X_val, act_func)
 
-            accuracy = sum(predictions == y_val) / len(y_val)
-            print "Accuracy obtained : ", accuracy
+        accuracy = sum(predictions == y_val) / len(y_val)
+        print "Accuracy obtained : ", accuracy
 
-            if (accuracy > best_accuracy):
-                best_accuracy = accuracy
-                best_lam = lam[i]
-                best_alpha = alpha[j]
+        if (accuracy > best_accuracy):
+            best_accuracy = accuracy
+            best_lam = lam[i]
 
-    return {'lam': best_lam, 'alpha': best_alpha}
+    return {'lam': best_lam}
 
 def run():
 
     print "Loading data..."
     np.random.seed(0)
-    X, y = sklearn.datasets.make_moons(n_samples=num_examples, noise=0.20)
+    #X, y = sklearn.datasets.make_moons(n_samples=num_examples, noise=0.20)
     #X, y = sklearn.datasets.make_classification(n_samples = num_examples, n_features=2, n_classes=2, n_informative=2, n_redundant=0, n_repeated=0, n_clusters_per_class=1)
     #X, y = sklearn.datasets.make_blobs(n_samples=num_examples, n_features=2, centers=num_labels)
     #TODO: add feature scalig for this to work
     #X, y = sklearn.datasets.load_wine(True)
-    #X, y = sklearn.datasets.load_digits(return_X_y=True)
+    X, y = sklearn.datasets.load_digits(return_X_y=True)
     
     X_tc, X_test, y_tc, y_test = train_test_split(X, y, test_size=0.2, random_state=26, stratify=y)
     X_train, X_val, y_train, y_val = train_test_split(X_tc, y_tc, test_size=0.2, random_state=26, stratify=y_tc)
 
-    visualize.scatter_plot(X_train, y_train)
+    #visualize.scatter_plot(X_train, y_train)
     
     #TODO: ONLY single option should be set
     act_func = {"func": activation.tanh, "gradient": activation.tanh_gradient}
@@ -170,4 +159,4 @@ def run():
     print "Test set Accuracy = ", accuracy
     print "Woo hoo!"
  
-    visualize.plot_decision_boundary(model, X, y, act_func)
+    #visualize.plot_decision_boundary(model, X, y, act_func)
