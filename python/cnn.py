@@ -83,7 +83,6 @@ def forward(X, i, arc):
             result = relu(result)
         
         activations = activations + (result, )
-    #print activations 
     return result, activations
 
 def backward(dd, activations, arc, alpha = 0.1):
@@ -96,22 +95,26 @@ def backward(dd, activations, arc, alpha = 0.1):
             layer['db'] += db
         if layer['layer'] == 'relu':
             dd = relu_gradient(activations[j], dd)
-             
+    pass
+
+"""
+W_in, H_in, D_in = X.shape
+W_out = (W_in - F + 2P)/S + 1
+weights : [D_out X FFD_in]
+biases : [D_out X 1]
+"""
 def convolution_forward(X, weights, biases, params):
     #Image size is W * H * D
-    field, padding, stride, filters = params #F, P, S, K
-    W, _, _ = X.shape
-
-    #Preprocessing X to fit the library requirements
+    field, padding, stride, D_out = params #F, P, S, K
+    W_in, _, _ = X.shape
+    W_out = int((W_in - field + 2 * padding)/stride) + 1
+    
+    #Preprocessing X for im2col library 
     X_pre = np.expand_dims(np.rollaxis(X, 2), axis=0)
-    X_columnar = im2col_indices(X_pre, field, field, padding, stride) #[F * F * D x (W - F + 2P)/S + 1 squared]
-    #weights : [filters x F * F * D]
-    #biases : [filters x 1]
-
-    result = np.dot(weights, X_columnar) # [ filters x (W - F + 2P)/S + 1 squared ]
-    W2 = int((W - field + 2 * padding)/stride) + 1
-
-    result = np.reshape(result.T, (W2, W2, filters))
+    X_columnar = im2col_indices(X_pre, field, field, padding, stride) #[FFD_in X W_out**2]
+    
+    result = np.dot(weights, X_columnar) # [ D_out X W_out**2 ]
+    result = np.reshape(result.T, (W_out, W_out, D_out))
     result += biases
     return result
 
@@ -123,33 +126,36 @@ def relu_gradient(a, dd):
     #a  : W X H X D
     return (a > 0) * dd
 
+"""
+a = activations in the current layer
+dd = gradients of the next layer
+dWeight = dd * a
+dBiase = dd
+dActivtion = dd * Weight
+
+D_out = filters
+W_out = (W_in - F + 2P)/S + 1
+"""
 def convolution_gradient(a, dd, weights, biases, params):
     field, padding, stride, filters = params
-    """
-    dWeight = dd *  a
-    dBias   = dd 
-    dActivation = dd * Weight
+    
+    W_out, H_out, D_out = dd.shape
+    W_in, H_in, D_in = a.shape
 
-    D2 = filters
-    W2 = (W - F + 2P) / S + 1
-    """
-    W2, H2, D2 = dd.shape
-    W, H, D = a.shape
-
-    dd = dd.reshape(W2 * H2, D2)
-    #Preprocess a
-    a = np.expand_dims(np.rollaxis(a, 2), axis=0) 
-    a_columnar = im2col_indices(a, field, field, padding, stride) #[FFD X W2xH2]
-
-    dWeight = np.dot(a_columnar, dd).T #[ D2 X FFD ]
+    #Preprocess 'a' for im2col utility
+    a = np.expand_dims(np.rollaxis(a, 2), axis=0)
+    a_columnar = im2col_indices(a, field, field, padding, stride)#[FFD X W_out*H_out]
+    dd = dd.reshape(W_out * H_out, D_out)
+    
+    dWeight = np.dot(a_columnar, dd).T #[ D_out X FFD ]
     dBias = np.sum(dd, axis=0)
-    dActivation = np.dot(dd, weights).T # FFD2 X W2**2
-    dActivation = col2im_indices (dActivation, (1, D, W, H),
-            field, field, padding, stride) # 1 X D X W X H
+    dActivation = np.dot(dd, weights).T #[FFD_out X W_out**2]
+    dActivation = col2im_indices (dActivation, (1, D_in, W_in, H_in),
+            field, field, padding, stride) # 1 X D_in X W_in X H_in
     #Convert to required format
     dActivation = np.squeeze(dActivation, axis=0)
     #Move D axis to end
-    dActivation = np.rollaxis(dActivation, 0, 3) #W X H X D
+    dActivation = np.rollaxis(dActivation, 0, 3) #W_in X H_in X D_in
 
     return (dWeight, dBias, dActivation)
 
@@ -159,11 +165,8 @@ def predict(arc, X_test):
         result, activations = forward(X_test, i, arc)
         result_exp = np.exp(result)
         result = result_exp / np.sum(result_exp)
-        result = result.ravel()
-        #Now result stores the final list of probabilities
+        result = result.ravel() #Now result stores the final list of probabilities
         
-        #prediction = np.argmax(result)
-        #predictions.append(prediction)
         predictions.append(result)
 
     return predictions
