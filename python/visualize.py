@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib
+from PIL import Image
 
 import predict
 
@@ -28,3 +29,23 @@ def plot_decision_boundary(model, X, y, act_func):
     plt.contourf(xg, yg, Z) 
     plt.scatter(X[:,0], X[:,1], c=y, s=20, cmap=plt.cm.Spectral)
     plt.show()
+
+def show_svhn_dataset(X):
+    #Show first hundred examples
+    X = X[:100]
+    h = w = 32
+
+    data = np.zeros((32*10, 32*10), dtype=np.uint8)
+    for i in range (10):
+        for j in range (10):
+            k = 10 * i + j
+            offset_x = i * w
+            offset_y = j * h
+            for x in range(w):
+                for y in range(h):
+                    data[offset_x + x, offset_y + y] = X[k][x * w + y]
+
+    img = Image.fromarray(data)
+    img.show()
+
+
