@@ -1,4 +1,4 @@
-A simple neural network with 1 hidden layer is implemented in nnet.py
+A simple neural network with 1 hidden layer is implemented in nnet.py.
 A convolutional neural network is implemented in cnn.py with convolution and ReLU layer
 
 TODO
