@@ -1,0 +1,9 @@
+TODO
+---------------------------------------------
+1. Optimize training time
+2. Completely vectorize training for CNN
+3. Add feature scaling
+4. Add support for recognizing characters (dataset required)
+5. Design architecture to fit SVHN dataset
+6. Add max pool layer
+7. Implement velocity and momentum for training

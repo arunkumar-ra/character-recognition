@@ -11,24 +11,23 @@ import visualize
 import predict
 import activation
 import cnn
+import argparse
 
-num_examples = 73257
-
-num_layers = 3
-#layer_size = [2, 5, 2]
-#layer_size = [1024, 500, 10]
+num_examples = 1000
 
 def svhn_dataset():
-    mat = spio.loadmat('/Users/arun/Downloads/datasets/SVHN/train_32x32.mat')
+    #http://ufldl.stanford.edu/housenumbers/train_32x32.mat
+    mat = spio.loadmat('/Users/arun/Downloads//datasets/SVHN/train_32x32.mat')
     X = mat['X']
     y = (mat['y'] - 1).ravel()
 
     X = np.rollaxis(X, 3, 0)
     #visualize.show_svhn_dataset(X)
-
+    print X.shape, y.shape
     return (X, y)
 
 def clean_svhn_dataset(count=73257):
+    #http://ufldl.stanford.edu/housenumbers/train_32x32.mat
     mat = spio.loadmat('/Users/arun/Downloads/datasets/SVHN/train_32x32.mat')
     X = mat['X']
     y = (mat['y'] - 1).ravel()
@@ -36,13 +35,13 @@ def clean_svhn_dataset(count=73257):
     greyX = np.mean(X, dtype=np.uint8, axis=2)
     X = np.reshape(greyX, (1024,73257)).T #Convert to 2D.
     print X.shape, y.shape
-    visualize.show_svhn_dataset(X)
+    #visualize.show_svhn_dataset(X)
 
     #X_train, y_train = train_test_split(X, y, train_size=count, random_state=26, stratify=y)
     return (X[:count], y[:count])
 
 def nist_dataset():
-    mat = spio.loadmat('/Users/arun/Downloads/datasets/MNIST/data.mat')
+    mat = spio.loadmat('mnist.mat')
     X = mat['X']
     y = (mat['y'] % 10).ravel()
 
@@ -88,83 +87,32 @@ def run():
  
     #visualize.plot_decision_boundary(model, X, y, act_func)
 
-def svhn():
+def main(X, y):
     print "Loading data..."
-    np.random.seed(0)
 
-    #X, y = svhn_dataset()
-    #X, y = cnn_sklearn_digits()
-    X, y = nist_dataset()
-
-    #Preprocess data 
+    #Preprocess data by shuffling and splitting
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=26, stratify=y)
 
-    #TODO: Fit hyperparameters
-
-    F1, P1, S1, K1 = 8, 0, 1, 40
-    F2, P2, S2, K2 = 13, 0, 1, 10
-    image_depth = 1
-
-    arc = ({'level': 1, 'layer': 'conv', 'weights': getWeights(F1, F1, image_depth, K1), 'biases': getBiases(K1), 'params' : (F1, P1, S1, K1) },
-            {'level': 2, 'layer': 'relu'},
-            {'level': 3, 'layer': 'conv', 'weights': getWeights(F2, F2, K1, K2), 'biases': getBiases(K2), 'params': (F2, P2, S2, K2) },
-        )
-
-    """
-    
-    arc = (
-        {'level': 1, 'layer': 'conv', 'weights': getWeights(8, 8, 1, 20), 'biases': getBiases(20), 'params': (8, 0, 1, 20) },
-        {'level': 2, 'layer': 'relu'},
-        {'level': 3, 'layer': 'conv', 'weights': getWeights(1, 1, 20, 10), 'biases': getBiases(10), 'params': (1, 0, 1, 10) }
-            )
-    """
-    cnn.train(X_train, y_train, arc)
-    probs = cnn.predict(arc, X_test)
+    model = cnn.train(X_train, y_train)
+    probs = cnn.predict(model, X_test)
     
     predictions = np.argmax(probs, axis=1)
-
-    print predictions
-    print y_test
-
     accuracy = sum(predictions == y_test) / len(y_test)
 
     print "Test set accuracy = ", accuracy
 
-def getWeights(W, H, D, K):
-    epsilon = 0.012
-    return np.random.rand(K, W*H*D) * 2 * epsilon - epsilon
 
-def getBiases(K):
-    return np.random.rand(K)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Pick nist/svhn to process.")
+    parser.add_argument("dataset", help="nist/svhn")
+    args = parser.parse_args()
 
-def test():
-    X = np.array([[1, 2, 3], [4, 5, 4], [3, 2, 1]])
-    X = X[None,:,:,None]
-    y = [0]
+    np.random.seed(0)
+    X, y = (None, None)
+    
+    if args.dataset == "svhn":
+        X, y = svhn_dataset()
+    elif args.dataset == "nist":
+        X, y = nist_dataset()
 
-    W1 = np.array([[1, 2, 3, 4]])
-    W2 = np.array([[1, 0, 0, -1], [-1, 0, 0, -1]])
-    b1 = np.array([0])
-    b2 = np.array([1, 1])
-
-    F1, P1, S1, K1 = 2, 0, 1, 1
-    F2, P2, S2, K2 = 2, 0, 1, 2
-
-    arc = (
-            {'level': 1, 'layer': 'conv', 'weights': W1, 'biases': b1, 
-                'params': (F1, P1, S1, K1)
-                },
-            {'level': 2, 'layer': 'conv', 'weights': W2, 'biases': b2,
-                'params': (F2, P2, S2, K2)
-                },
-        )
-
-    r, a = cnn.forward(X, 0, arc)
-    R = np.array([1, 0])
-    Y = np.array([0, 1])
-
-    dd = R - Y
-    dd = dd[None, None, :]
-
-    cnn.backward(dd, a, arc, 1)
-
+    main(X, y)
