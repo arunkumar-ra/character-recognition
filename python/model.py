@@ -4,6 +4,7 @@ class model:
 		self.forward_output = None
 		self.backward_output = None
 		self.loss_layer = None
+		self.params = None
 
 	def add(self, layer):
 		self.layers.append(layer)
@@ -11,6 +12,9 @@ class model:
 	def set_loss(self, layer):
 		self.layers.append(layer)
 		self.loss_layer = layer
+
+	def set_hyper_params(self, params):
+		self.params = params
 
 	def forward(self, X, is_train = False):
 		if self.loss_layer == None:

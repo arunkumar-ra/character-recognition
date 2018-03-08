@@ -1,6 +1,5 @@
 import numpy as np
 
-#TODO: should we use softmax in predict?
 #TODO: Predict probabilities
 def predict(model, X, act_func):
     activation_function = act_func['func']

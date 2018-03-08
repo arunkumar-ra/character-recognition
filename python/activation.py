@@ -1,6 +1,7 @@
 import numpy as np
 import math
 
+#TODO: Use classes
 def sigmoid(z):
     sig = lambda t: 1/ (1 + math.exp(-t))
     vectorized_sigmoid = np.vectorize(sig)

@@ -11,3 +11,5 @@ TODO
 [] Add max pool layer
 [] Implement velocity and momentum for training
 [] Preprocess data for SVHN dataset
+[] Use CNN to reverse generate images
+[] Generate attack images to fool CNN

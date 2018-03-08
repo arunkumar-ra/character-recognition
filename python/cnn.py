@@ -4,22 +4,32 @@ import layers
 import model
 from sklearn.model_selection import train_test_split
 
-def train(X, y):
-    batch_size = 20
-    learning_rate = 0.01
-    epochs = 20
-    num_classes = 10
-    dropout_rate = 0.1
-
+def get_model():
+    params = {
+        'batch_size': 20,
+        'learning_rate': 0.01,
+        'epochs':  20,
+        'num_classes':  10,
+        'dropout_rate': 0.1
+    }
+    
     Model = model.model()
     Model.add(layers.convolution_layer(field=8, padding=0, stride=1, depth=1, filters=5))
     Model.add(layers.relu_layer())
     Model.add(layers.flatten_layer())
-    Model.add(layers.dropout_layer(r = dropout_rate))
+    Model.add(layers.dropout_layer(r = params['dropout_rate']))
     Model.add(layers.linear_layer(13*13*5, 10))
     Model.set_loss(layers.softmax_cross_entropy())
+    Model.set_hyper_params(params)
 
-    #Only flatten, linear and softmax would form a multi logistic regression 
+    return Model
+
+def train(X, y, Model=get_model()):
+    batch_size = Model.params['batch_size']
+    learning_rate = Model.params['learning_rate']
+    epochs = Model.params['epochs']
+    num_classes = Model.params['num_classes']
+    dropout_rate = Model.params['dropout_rate'] #Not required
 
     correct_predictions = np.zeros(10)
 
@@ -40,7 +50,7 @@ def train(X, y):
             if np.argmax(yhat) == y[j]:
                 correct_predictions[y[j]] += 1
             #TODO: how to avoid log of 0
-            J -= np.sum(Y * np.log(yhat) + (1 - Y) * np.log(1 - yhat))
+            #J -= np.sum(Y * np.log(yhat) + (1 - Y) * np.log(1 - yhat))
 
             if (j + 1) % batch_size == 0:
                 Model.update_weights(learning_rate)
