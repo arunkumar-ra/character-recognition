@@ -12,8 +12,8 @@ import predict
 import activation
 import cnn
 import argparse
-import nist
-import svhn
+from nist import nist
+from svhn import svhn
 
 num_examples = 1000
 

@@ -24,6 +24,21 @@ def get_model():
 
     return Model
 
+def get_batch(X, y, batch_size):
+    N = len(X)
+    for i in range(0, N, batch_size):
+        X_batch = X[i:i+batch_size]
+        y_batch = y[i:i+batch_size]
+
+        yield (X_batch, y_batch)
+
+def get_X_batch(X, batch_size):
+    N = len(X)
+    for i in range(0, N, batch_size):
+        X_batch = X[i:i+batch_size]
+
+        yield X_batch
+
 def train(X, y, Model=get_model()):
     batch_size = Model.params['batch_size']
     learning_rate = Model.params['learning_rate']
@@ -37,47 +52,48 @@ def train(X, y, Model=get_model()):
     X, y = (X_train, y_train)
     for i in range(epochs):
         J = 0
-        correct_predictions = np.zeros(10)
+        correct_predictions = 0
 
-        for j in range(len(X)):
-            Y = np.zeros(num_classes)
-            Y[y[j]] = 1
+        for X_batch, y_batch in get_batch(X, y, batch_size):
+            N = len(y_batch)
+            Y = np.zeros((N, num_classes)) #We use N = len(y_batch) because the last set might have fewer than batch_size examples
+            Y[np.arange(N), y_batch] = 1
 
-            yhat = Model.forward(X[j], is_train=True)
+            yhat = Model.forward(X_batch, is_train=True)
             Model.backward(yhat, Y)
 
-            #DEBUG
-            if np.argmax(yhat) == y[j]:
-                correct_predictions[y[j]] += 1
+            predictions = np.argmax(yhat, axis=1)
+            #TODO: Count each number separately
+            correct_predictions += sum(predictions == y_batch)
+            
             #TODO: how to avoid log of 0
             #J -= np.sum(Y * np.log(yhat) + (1 - Y) * np.log(1 - yhat))
 
-            if (j + 1) % batch_size == 0:
-                Model.update_weights(learning_rate)
+            Model.update_weights(learning_rate)
 
             # if (j+1) % 1000 == 0:
             #     print "Cost in ", j+1, " iterations = ", J/(j+1)
             #     print "Correct predictions count ", correct_predictions
             #     print "Total correct ", np.sum(correct_predictions), "/", (j+1)
 
-        Model.update_weights(learning_rate)
-        
         #Checking against cross validation set to prevent overfitting
-        cross_val_prediction_probabilities = predict(Model, X_val)
+        cross_val_prediction_probabilities = predict(Model, X_val, batch_size)
         cross_val_predictions = np.argmax(cross_val_prediction_probabilities, axis=1)
         prediction_accuracy = sum(cross_val_predictions == y_val) / len(y_val)
 
         print "Epoch: ", i+1
-        print "Training prediction accuracy: %.3f" % (np.sum(correct_predictions)/len(X))
+        print "Training prediction accuracy: %.3f" % (correct_predictions/len(X))
         print "Cross validation accuracy: ", prediction_accuracy
 
     return Model
 
-def predict(Model, X_test):
+def predict(Model, X_test, batch_size=20):
     predictions = []
-    for i in range (len(X_test)):
-        probs = Model.forward(X_test[i])
+    for X_batch in get_X_batch(X_test, batch_size):
+        probs = Model.forward(X_batch, is_train = False)
+        
         predictions.append(probs)
 
-    return predictions
+    predictions = np.array(predictions)
 
+    return np.reshape(predictions, (len(X_test), predictions.shape[2]))

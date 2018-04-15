@@ -25,33 +25,22 @@ class linear_layer(layer):
 		self.weights = np.random.normal(0, 0.1, (input_D, output_D))
 		self.biases = np.random.normal(0, 0.1, (1, output_D))
 
-		self.dw = np.zeros((input_D, output_D))
-		self.db = np.zeros((1, output_D))
-	
 	def forward(self, X):
 		forward_output = np.dot(X, self.weights) + self.biases
-		#print forward_output.shape, X.shape, self.weights.shape, self.biases.shape
 		return forward_output
 
 	def backward(self, X, grad):
-		#print X.shape, grad.shape
-		#self.dw += np.dot(X.T, grad)
-		self.dw += np.outer(X, grad)
-		#self.db += np.sum(grad, axis=0)
-		self.db += grad
+		self.dw = np.dot(X.T, grad)
+		#self.dw += np.outer(X, grad)
+		self.db = np.sum(grad, axis=0)
+		#self.db += grad
 		backward_output = np.dot(grad, self.weights.T)
 
 		return backward_output
 
 	def update_weights(self, learning_rate):
-		#print "Updating weights"
 		self.weights -= self.dw * learning_rate
 		self.biases -= self.db * learning_rate
-		#print self.weights[:10]
-		#print self.biases
-		#TODO: Not required when batching support is added
-		self.dw = np.zeros(self.weights.shape)
-		self.db = np.zeros(self.biases.shape)
 
 class convolution_layer(layer):
 
@@ -63,11 +52,9 @@ class convolution_layer(layer):
 		self.stride = stride
 		self.depth = depth
 		self.filters = filters
-	    
+		
 		self.weights = np.random.rand(filters, field * field * depth) * 2 * epsilon - epsilon
 		self.biases = np.random.rand(filters)
-		self.dw = np.zeros((self.weights.shape))
-		self.db = np.zeros((self.biases.shape))
 
 	"""
 	D_out = filters
@@ -77,18 +64,20 @@ class convolution_layer(layer):
 	biases : [D_out X 1]
 	"""
 	def forward(self, X):
-	    #Image size is W * H * D
-	    W_in, _, _ = X.shape
-	    W_out = int((W_in - self.field + 2 * self.padding)/self.stride) + 1
-	    
-	    #Preprocessing X for im2col library 
-	    X_pre = np.expand_dims(np.rollaxis(X, 2), axis=0)
-	    X_columnar = im2col_indices(X_pre, self.field, self.field, self.padding, self.stride) #[FFD_in X W_out**2]
-	    
-	    result = np.dot(self.weights, X_columnar) # [ D_out X W_out**2 ]
-	    result = np.reshape(result.T, (W_out, W_out, self.filters))
-	    result += self.biases
-	    return result
+		#Image size is W * H * D
+		N, W_in, _, _ = X.shape
+		W_out = int((W_in - self.field + 2 * self.padding)/self.stride) + 1
+		
+		#Preprocessing X for im2col library 
+		#TODO: Save this result
+		X_pre = np.rollaxis(X, 3, 1)
+		X_columnar = im2col_indices(X_pre, self.field, self.field, self.padding, self.stride) #[FFD_in X N*W_out**2] ?
+		
+		result = np.dot(self.weights, X_columnar) # [ D_out X N*W_out**2 ]
+		result = np.reshape(result.T, (W_out, W_out, N, self.filters)) 
+		result = np.rollaxis(result, 2)
+		result += self.biases
+		return result
 
 	"""
 	a = activations in the current layer
@@ -101,42 +90,45 @@ class convolution_layer(layer):
 	W_out = (W_in - F + 2P)/S + 1
 	"""
 	def backward(self, X, grad):
-	    
-	    W_out, H_out, D_out = grad.shape
-	    W_in, H_in, D_in = X.shape
+		N, W_out, H_out, D_out = grad.shape
+		N, W_in, H_in, D_in = X.shape
 
-	    #Preprocess 'a' for im2col utility
-	    X = np.expand_dims(np.rollaxis(X, 2), axis=0)
-	    a_columnar = im2col_indices(X, self.field, self.field, self.padding, self.stride)#[FFD X W_out*H_out]
-	    grad = grad.reshape(W_out * H_out, D_out)
-	    
-	    dWeight = np.dot(a_columnar, grad).T #[ D_out X FFD ]
-	    dBias = np.sum(grad, axis=0)
-	    dActivation = np.dot(grad, self.weights).T #[FFD_out X W_out**2]
-	    dActivation = col2im_indices (dActivation, (1, D_in, W_in, H_in),
-	            self.field, self.field, self.padding, self.stride) # 1 X D_in X W_in X H_in
-	    #Convert to required format
-	    dActivation = np.squeeze(dActivation, axis=0)
-	    #Move D axis to end
-	    dX = np.rollaxis(dActivation, 0, 3) #W_in X H_in X D_in
+		#Preprocess 'a' for im2col utility
+		
+		grad = np.rollaxis(grad, 3, 1)
+		grad = np.rollaxis(grad, 0, 4) # D_out X H_out X W_out X N
 
-	    self.dw += dWeight
-	    self.db += dBias
-	    return dX
+		X = np.rollaxis(X, 3, 1)
+		a_columnar = im2col_indices(X, self.field, self.field, self.padding, self.stride)#[FFD X W_out*H_out*N]
+
+		grad = grad.reshape(D_out, N * W_out * H_out)
+		
+		dWeight = np.dot(grad, a_columnar.T) #[ D_out X FFD ]
+		dBias = np.sum(grad, axis=1) #D_out
+		dActivation = np.dot(grad.T, self.weights).T #[FFD_out X N*W_out**2]
+		dActivation = col2im_indices (dActivation, (N, D_in, W_in, H_in),
+				self.field, self.field, self.padding, self.stride) # N X D_in X W_in X H_in
+		
+		#Move D axis to end
+		dX = np.rollaxis(dActivation, 1, 4) #N X W_in X H_in X D_in
+		
+		self.dw = dWeight
+		self.db = dBias
+		
+		return dX
 
 	def update_weights(self, learning_rate):
 		self.weights -= self.dw * learning_rate
 		self.biases -= self.db * learning_rate
-		self.dw = np.zeros((self.weights.shape))
-		self.db = np.zeros((self.biases.shape))
-
+		
 class softmax_cross_entropy(layer):
 	def forward(self, X):
-		R = X.ravel()
+		#R = X.ravel()
+		R = X
 		#print R
-		R = R - np.max(R)
+		R = R - np.max(R, axis=1)[:, None]
 		R_exp = np.exp(R)
-		R = R_exp / np.sum(R_exp)
+		R = R_exp / np.sum(R_exp, axis=1)[:, None]
 
 		return R
 
@@ -153,26 +145,26 @@ class relu_layer(layer):
 		return np.maximum(0, X)
 
 	def backward(self, X, grad):
-    	#dd : W X H X D
-    	#a  : W X H X D
+		#dd : W X H X D
+		#a  : W X H X D
 		return (X > 0) * grad
 
 #Taken from CSCI 567 Assignment 2
 class flatten_layer(layer):
 
-    def __init__(self):
-        self.size = None
+	def __init__(self):
+		self.size = None
 
-    def forward(self, X):
-        self.size = X.shape
-        out_forward = X.reshape(-1)
+	def forward(self, X):
+		self.size = X.shape
+		out_forward = X.reshape(X.shape[0], -1)
 
-        return out_forward
+		return out_forward
 
-    def backward(self, X, grad):
-        out_backward = grad.reshape(self.size)
+	def backward(self, X, grad):
+		out_backward = grad.reshape(self.size)
 
-        return out_backward
+		return out_backward
 
 #Taken from CSCI 567 Assignment 2
 class dropout_layer(layer):
